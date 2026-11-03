@@ -58,7 +58,15 @@
 #include "msm_mmu.h"
 #include "sde_wb.h"
 #include "sde_dbg.h"
-
+#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
+#include "dsi_iris_api.h"
+#endif
+#ifdef OPLUS_FEATURE_DISPLAY
+#include "leds_ktz8866.h"
+#endif
+#ifdef CONFIG_HMBIRD_SCHED_GKI
+#include <linux/sched/sched_ext.h>
+#endif
 /*
  * MSM driver version:
  * - 1.0.0 - initial interface
@@ -124,6 +132,9 @@ static void msm_drm_display_thread_priority_worker(struct kthread_work *work)
 	if (ret)
 		pr_warn("pid:%d name:%s priority update failed: %d\n",
 			current->tgid, task->comm, ret);
+#if defined(CONFIG_HMBIRD_SCHED) || defined(CONFIG_HMBIRD_SCHED_GKI)
+	sched_set_sched_prop(task, SCHED_PROP_DEADLINE_LEVEL3);
+#endif
 }
 
 /**
@@ -916,6 +927,10 @@ static int msm_drm_component_init(struct device *dev)
 
 	mutex_init(&priv->vm_client_lock);
 	mutex_init(&priv->fence_error_client_lock);
+
+#ifdef OPLUS_FEATURE_DISPLAY
+	mutex_init(&priv->dspp_lock);
+#endif /* OPLUS_FEATURE_DISPLAY */
 
 	/* Bind all our sub-components: */
 	ret = msm_component_bind_all(dev, ddev);
@@ -1799,6 +1814,12 @@ static const struct drm_ioctl_desc msm_ioctls[] = {
 			DRM_RENDER_ALLOW),
 	DRM_IOCTL_DEF_DRV(MSM_DISPLAY_HINT, msm_ioctl_display_hint_ops,
 			DRM_UNLOCKED),
+#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_CONF, msm_ioctl_iris_operate_conf,
+			DRM_UNLOCKED|DRM_RENDER_ALLOW),
+	DRM_IOCTL_DEF_DRV(MSM_IRIS_OPERATE_TOOL, msm_ioctl_iris_operate_tool,
+			DRM_UNLOCKED|DRM_RENDER_ALLOW),
+#endif
 };
 
 static const struct file_operations fops = {
@@ -2365,6 +2386,9 @@ static int __init msm_drm_register(void)
 	msm_dsi_register();
 	msm_edp_register();
 	msm_hdmi_register();
+#ifdef OPLUS_FEATURE_DISPLAY
+	bl_ic_ktz8866_init();
+#endif
 	return 0;
 }
 
@@ -2382,6 +2406,9 @@ static void __exit msm_drm_unregister(void)
 	dp_display_unregister();
 	dsi_display_unregister();
 	sde_rsc_unregister();
+#ifdef OPLUS_FEATURE_DISPLAY
+	bl_ic_ktz8866_exit();
+#endif
 	platform_driver_unregister(&msm_platform_driver);
 }
 
